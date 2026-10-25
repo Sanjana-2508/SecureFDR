@@ -8,10 +8,19 @@ import { inr, fmtDate, STATUS_COLORS } from '../utils'
 
 function Stat({ icon: Icon, label, value, color }) {
   return (
-    <div className="card bg-base-100 shadow-sm">
-      <div className="card-body p-5 flex-row items-center gap-4">
-        <div className={`p-3 rounded-xl ${color}`}><Icon size={22} /></div>
-        <div><div className="text-2xl font-bold">{value}</div><div className="text-sm text-slate-500">{label}</div></div>
+    <div className="card dashboard-metric bg-white">
+      <div className="card-body flex-row items-center gap-4 p-5">
+        <div className={`dashboard-metric-icon ${color}`}>
+          <Icon size={21} strokeWidth={1.8} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-2xl font-bold tracking-tight text-slate-900">
+            {value}
+          </div>
+          <div className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">
+            {label}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -59,8 +68,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">Welcome back, {user.name.split(' ')[0]} 👋</h1>
-        <p className="text-slate-500 text-sm">{isInst ? 'Overview of your institution’s FDRs' : 'Consolidated view of the institution-wise FDR portfolio'}</p></div>
+      <div className="mb-1 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            Portfolio overview
+          </p>
+          <h1 className="page-title text-2xl font-bold">
+            Welcome back, {user.name.split(' ')[0]}
+          </h1>
+          <p className="page-subtitle mt-1 text-sm">
+            {isInst ? 'Overview of your institution’s FDRs' : 'Consolidated view of the institution-wise FDR portfolio'}
+          </p>
+        </div>
+        <span className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500 sm:inline-flex">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          Portfolio data
+        </span>
+      </div>
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Stat icon={FileStack} label={isInst ? 'My FDRs' : 'Total FDRs'} value={fdrs.length} color="bg-blue-100 text-blue-700" />
@@ -70,18 +94,37 @@ export default function Dashboard() {
       </div>
 
       <div className="grid xl:grid-cols-5 gap-4">
-        <div className="card bg-base-100 shadow-sm xl:col-span-2"><div className="card-body">
-          <h2 className="card-title text-base">FDRs by status and maturity</h2>
-          <p className="text-xs text-slate-500">Matured includes active FDRs past their maturity date or formally marked MATURED. Overdue is the past-date subset; renewed and released FDRs are excluded.</p>
-          <div className="h-64"><ResponsiveContainer>
-            <BarChart data={chart} layout="vertical" margin={{ left: 20 }}>
-              <XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="status" width={90} tick={{ fontSize: 11 }} />
-              <Tooltip /><Bar dataKey="count" radius={4}>{chart.map((c) => <Cell key={c.key} fill={STATUS_COLORS[c.key] || c.color} />)}</Bar>
-            </BarChart></ResponsiveContainer></div>
+        <div className="card bg-white xl:col-span-2"><div className="card-body p-5 md:p-6">
+          <div className="mb-1">
+            <h2 className="card-title text-base">FDR status & maturity</h2>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Matured includes active FDRs past their maturity date or formally marked MATURED. Overdue is the past-date subset; renewed and released FDRs are excluded.</p>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer>
+              <BarChart data={chart} layout="vertical" margin={{ left: 12, right: 12, top: 4, bottom: 4 }} barCategoryGap={8}>
+                <XAxis type="number" allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="status" width={105} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: '#f3f6fb' }}
+                  contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
+                  formatter={(value, _name, item) => [value, item.payload.key === 'OVERDUE' ? 'Overdue by date' : item.payload.key === 'UPCOMING' ? 'Upcoming within 60 days' : item.payload.key === 'MATURED' ? 'Matured (active)' : item.payload.status]}
+                />
+                <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={18}>
+                  {chart.map((c) => <Cell key={c.key} fill={STATUS_COLORS[c.key] || c.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div></div>
 
-        <div className="card bg-base-100 shadow-sm xl:col-span-3"><div className="card-body">
-          <h2 className="card-title text-base">Expiring soon / overdue</h2>
+        <div className="card bg-white xl:col-span-3"><div className="card-body p-5 md:p-6">
+          <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="card-title text-base">Maturity watch</h2>
+              <p className="mt-1 text-xs text-slate-500">Upcoming in the next 60 days and past maturity</p>
+            </div>
+            <span className="badge border-0 bg-amber-50 text-amber-800">{expiring.length} records</span>
+          </div>
           {expiring.length === 0 ? <div className="text-center text-slate-400 py-12">🎉 Nothing maturing in the next 60 days</div> : (
             <div className="overflow-x-auto"><table className="table table-sm">
               <thead><tr><th>FDR</th>{!isInst && <th>Institution</th>}<th>Amount</th><th>Matures</th><th>Status</th></tr></thead>

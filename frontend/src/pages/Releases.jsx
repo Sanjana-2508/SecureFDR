@@ -176,15 +176,18 @@ export default function Releases() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Release Management</h1>
-          <p className="mt-1 text-sm opacity-70">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            Deposit lifecycle
+          </p>
+          <h1 className="page-title text-2xl font-bold">Release Management</h1>
+          <p className="page-subtitle mt-1 text-sm">
             Submit, review, and track security deposit release requests.
           </p>
         </div>
 
         <button
           type="button"
-          className="btn btn-outline btn-sm"
+          className="btn btn-outline btn-sm border-slate-300 bg-white text-slate-700 hover:border-primary hover:bg-blue-50 hover:text-primary"
           onClick={loadData}
           disabled={loading}
         >
@@ -197,12 +200,15 @@ export default function Releases() {
       {success && <div className="alert alert-success">{success}</div>}
 
       {isInstitution && (
-        <div className="card bg-base-100 shadow-sm">
+        <div className="card bg-white">
           <div className="card-body">
-            <h2 className="card-title">
+            <h2 className="card-title text-base">
               <Send size={20} />
               Request FDR release
             </h2>
+            <p className="text-sm text-slate-500">
+              Submit a request for review. A matured FDR is not released until its release workflow is approved and recorded.
+            </p>
 
             {eligibleFdrs.length === 0 ? (
               <p className="text-sm opacity-70">
@@ -264,9 +270,9 @@ export default function Releases() {
         </div>
       )}
 
-      <div className="card bg-base-100 shadow-sm">
+      <div className="card bg-white">
         <div className="card-body">
-          <h2 className="card-title">
+          <h2 className="card-title text-base">
             <ClipboardList size={20} />
             Release requests
             <span className="badge">{requests.length}</span>
@@ -285,7 +291,7 @@ export default function Releases() {
               {requests.map((request) => (
                 <article
                   key={request.id}
-                  className="space-y-4 rounded-xl border p-4"
+                  className="workflow-item space-y-4 rounded-xl border p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>

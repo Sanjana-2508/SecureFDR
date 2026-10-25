@@ -280,8 +280,8 @@ export default function FdrList() {
       {/* Page heading */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">FDR Records</h1>
-          <p className="mt-1 text-sm opacity-70">
+          <h1 className="page-title text-2xl font-bold">FDR Records</h1>
+          <p className="page-subtitle mt-1 text-sm">
             Manage security deposits and fixed deposit receipts.
           </p>
         </div>
@@ -366,7 +366,7 @@ export default function FdrList() {
       </div>
 
       {/* FDR table */}
-      <div className="overflow-x-auto rounded-xl bg-base-100 shadow-sm">
+      <div className="table-shell overflow-x-auto">
         <table className="table">
           <thead>
             <tr>
@@ -375,6 +375,7 @@ export default function FdrList() {
               <th>Bank</th>
               <th>Reference No.</th>
               <th>Amount</th>
+              <th>Issue Date</th>
               <th>Maturity Date</th>
               <th>Status</th>
               <th>Action</th>
@@ -396,6 +397,7 @@ export default function FdrList() {
                 <td>{fdr.reference_no}</td>
 
                 <td>{inr(fdr.amount)}</td>
+                <td>{fmtDate(fdr.issue_date)}</td>
                 <td>{fmtDate(fdr.maturity_date)}</td>
 
                 <td>
@@ -422,7 +424,7 @@ export default function FdrList() {
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={isInstitution ? 7 : 8}
+                  colSpan={isInstitution ? 8 : 9}
                   className="py-10 text-center opacity-60"
                 >
                   No FDR records found.

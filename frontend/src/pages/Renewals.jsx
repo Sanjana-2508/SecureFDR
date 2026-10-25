@@ -99,8 +99,11 @@ export default function Renewals() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Renewal & Replacement</h1>
-        <p className="mt-1 text-sm opacity-70">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+          Deposit lifecycle
+        </p>
+        <h1 className="page-title text-2xl font-bold">Renewal & Replacement</h1>
+        <p className="page-subtitle mt-1 text-sm">
           Submit a replacement FDR linked to an existing verified or matured
           deposit.
         </p>
@@ -150,12 +153,15 @@ export default function Renewals() {
         </div>
       )}
 
-      <div className="card bg-base-100 shadow-sm">
+      <div className="card bg-white">
         <div className="card-body">
-          <h2 className="card-title">
+          <h2 className="card-title text-base">
             <RefreshCw size={20} />
             Submit replacement FDR
           </h2>
+          <p className="text-sm text-slate-500">
+            Link the new deposit to an eligible verified or matured FDR. The new record remains subject to officer verification.
+          </p>
 
           {loading ? (
             <div className="flex justify-center py-10">
@@ -186,7 +192,7 @@ export default function Renewals() {
               </label>
 
               {selectedId && (
-                <div className="rounded-lg border p-3 text-sm">
+                <div className="workflow-item rounded-xl border p-4 text-sm">
                   {(() => {
                     const f = eligible.find(
                       (item) => String(item.id) === String(selectedId)

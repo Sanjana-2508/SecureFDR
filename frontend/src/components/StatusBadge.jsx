@@ -1,7 +1,18 @@
 const MAP = {
-  SUBMITTED: 'badge-info', UNDER_REVIEW: 'badge-warning', DISCREPANCY: 'badge-error',
-  VERIFIED: 'badge-success', MATURED: 'badge-neutral', RENEWED: 'badge-secondary', RELEASED: 'badge-accent',
+  SUBMITTED: 'status-badge-submitted',
+  UNDER_REVIEW: 'status-badge-pending',
+  DISCREPANCY: 'status-badge-danger',
+  VERIFIED: 'status-badge-success',
+  MATURED: 'status-badge-matured',
+  RENEWED: 'status-badge-renewed',
+  RELEASED: 'status-badge-released',
 }
 export default function StatusBadge({ status }) {
-  return <span className={`badge ${MAP[status] || 'badge-ghost'} badge-sm font-medium whitespace-nowrap`}>{status.replace('_', ' ')}</span>
+  return (
+    <span
+      className={`badge status-badge ${MAP[status] || 'status-badge-default'}`}
+    >
+      {status.replace('_', ' ')}
+    </span>
+  )
 }

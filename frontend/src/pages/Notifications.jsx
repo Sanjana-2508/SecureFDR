@@ -102,10 +102,12 @@ export default function Notifications() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Bell size={25} />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-primary">
+              <Bell size={21} />
+            </span>
             Notifications
           </h1>
-          <p className="mt-1 text-sm opacity-70">
+          <p className="page-subtitle mt-2 text-sm">
             View FDR updates, maturity reminders, and workflow decisions.
           </p>
         </div>
@@ -190,7 +192,7 @@ export default function Notifications() {
         </div>
       )}
 
-      <div className="card bg-base-100 shadow-sm">
+      <div className="card bg-white">
         <div className="card-body">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -235,13 +237,19 @@ export default function Notifications() {
               {items.map((item) => (
                 <article
                   key={item.id}
-                  className={`rounded-xl border p-4 ${levelClass(item.level)} ${
+                  className={`workflow-item rounded-xl border p-4 ${levelClass(item.level)} ${
                     item.is_read ? 'opacity-75' : ''
                   }`}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex gap-3">
-                      <div className="mt-1">
+                      <div className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                        item.level === 'danger'
+                          ? 'bg-red-50'
+                          : item.level === 'warning'
+                            ? 'bg-amber-50'
+                            : 'bg-blue-50'
+                      }`}>
                         {item.level === 'danger' ? (
                           <AlertTriangle size={20} className="text-error" />
                         ) : (
