@@ -26,3 +26,6 @@ uploads/
 # Logs and editor files
 *.log
 .vscode/
+
+# Uploaded FDR documents
+backend/uploads/

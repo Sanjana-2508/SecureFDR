@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Search, Eye, Plus, X, Loader2 } from 'lucide-react'
+import {
+  Search,
+  Eye,
+  Plus,
+  X,
+  Loader2,
+  Upload,
+  Download,
+  FileText,
+} from 'lucide-react'
 import api, { errMsg } from '../api'
 import { useAuth } from '../AuthContext'
 import StatusBadge from '../components/StatusBadge'
@@ -34,7 +43,96 @@ export default function FdrList() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const [documents, setDocuments] = useState([])
+  const [loadingDocs, setLoadingDocs] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+
   const isInst = user.role === 'INSTITUTION'
+
+  const canUpload = user.role === 'INSTITUTION'
+
+  async function loadDocuments(fdrId) {
+    setLoadingDocs(true)
+    setError('')
+
+    try {
+      const response = await api.get(`/fdrs/${fdrId}/documents`)
+      setDocuments(response.data)
+    } catch (e) {
+      setDocuments([])
+      setError(errMsg(e))
+    } finally {
+      setLoadingDocs(false)
+    }
+  }
+
+  async function uploadDocument(e) {
+    e.preventDefault()
+
+    if (!sel || !selectedFile) {
+      setError('Please select a PDF certificate.')
+      return
+    }
+
+    if (selectedFile.type !== 'application/pdf' &&
+        !selectedFile.name.toLowerCase().endsWith('.pdf')) {
+      setError('Please select a PDF file.')
+      return
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setError('The PDF must be 5 MB or smaller.')
+      return
+    }
+
+    setUploading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const data = new FormData()
+      data.append('file', selectedFile)
+      data.append('doc_type', 'FDR_COPY')
+
+      await api.post(`/fdrs/${sel.id}/documents`, data)
+
+      setSelectedFile(null)
+      e.target.reset()
+
+      await loadDocuments(sel.id)
+      setSuccess('FDR certificate uploaded successfully!')
+    } catch (e) {
+      setError(errMsg(e))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function downloadDocument(document) {
+    setError('')
+
+    try {
+      const response = await api.get(
+        `/fdrs/${sel.id}/documents/${document.id}`,
+        { responseType: 'blob' }
+      )
+
+      const url = URL.createObjectURL(response.data)
+      const link = window.document.createElement('a')
+
+      link.href = url
+      link.download = document.filename || 'FDR-certificate.pdf'
+
+      window.document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError('Unable to download the document. Please try again.')
+    }
+  }
 
   async function loadFdrs() {
     try {
@@ -57,6 +155,14 @@ export default function FdrList() {
 
     return () => clearTimeout(timer)
   }, [q, status])
+
+  useEffect(() => {
+    if (sel?.id) {
+      setDocuments([])
+      setSelectedFile(null)
+      loadDocuments(sel.id)
+    }
+  }, [sel?.id])
 
   function updateField(e) {
     const { name, value } = e.target
@@ -418,7 +524,92 @@ export default function FdrList() {
               Verification shown here is simulated sample data — no bank
               integration.
             </div>
+            
+            <div className="divider">FDR Documents</div>
 
+              {canUpload && (
+                <form onSubmit={uploadDocument} className="space-y-3">
+                  <label className="form-control">
+                    <span className="label-text mb-1">
+                      Upload certificate (PDF, max 5 MB)
+                    </span>
+
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="file-input file-input-bordered w-full"
+                      onChange={(e) =>
+                        setSelectedFile(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={!selectedFile || uploading}
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={16} />
+                        Upload Certificate
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              <div className="space-y-2 mt-4">
+                <h4 className="font-semibold text-sm">Uploaded certificates</h4>
+
+                {loadingDocs ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Loader2 size={16} className="animate-spin" />
+                    Loading documents...
+                  </div>
+                ) : documents.length === 0 ? (
+                  <p className="text-sm text-base-content/60">
+                    No documents uploaded for this FDR yet.
+                  </p>
+                ) : (
+                  documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText size={20} className="shrink-0" />
+
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium break-all">
+                            {doc.filename}
+                          </p>
+                          <p className="text-xs text-base-content/60">
+                            {doc.doc_type} ·{' '}
+                            {doc.uploaded_at
+                              ? new Date(doc.uploaded_at).toLocaleString()
+                              : 'Date unavailable'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm shrink-0"
+                        onClick={() => downloadDocument(doc)}
+                      >
+                        <Download size={15} />
+                        Download
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             <div className="modal-action">
               <button
                 className="btn btn-sm"
