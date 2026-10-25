@@ -1,0 +1,4 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+body { @apply bg-base-200 text-slate-800; font-family: Inter, system-ui, sans-serif; }
