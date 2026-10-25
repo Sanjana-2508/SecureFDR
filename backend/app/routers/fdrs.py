@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -155,3 +155,112 @@ def create_fdr(
         raise HTTPException(500, "Unable to save the FDR record")
 
     return fdr_out(record)
+
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+
+class FDRDecision(BaseModel):
+    remarks: str = Field(min_length=3, max_length=1000)
+
+
+@router.post("/{fdr_id}/verify")
+def verify_fdr(
+    fdr_id: int,
+    data: FDRDecision,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    if user.role not in (models.ROLE_OFFICER, models.ROLE_ADMIN):
+        raise HTTPException(
+            status_code=403,
+            detail="Only officers or admins can verify FDRs",
+        )
+
+    fdr = db.get(models.FDRRecord, fdr_id)
+
+    if not fdr:
+        raise HTTPException(status_code=404, detail="FDR not found")
+
+    if fdr.status not in (
+        models.FDR_SUBMITTED,
+        models.FDR_UNDER_REVIEW,
+        models.FDR_DISCREPANCY,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot verify an FDR with status {fdr.status}",
+        )
+
+    fdr.status = models.FDR_VERIFIED
+    fdr.verification_remarks = data.remarks.strip()
+    fdr.verified_by_id = user.id
+    fdr.verified_at = datetime.utcnow()
+    fdr.is_simulated_verification = True
+
+    db.add(models.AuditLog(
+        user_id=user.id,
+        action="FDR_VERIFIED",
+        entity="fdr_record",
+        entity_id=fdr.id,
+        details=f"FDR {fdr.fdr_uid} marked verified. Verification is simulated.",
+    ))
+
+    try:
+        db.commit()
+        db.refresh(fdr)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to verify FDR")
+
+    return fdr_out(fdr)
+
+
+@router.post("/{fdr_id}/reject")
+def reject_fdr(
+    fdr_id: int,
+    data: FDRDecision,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    if user.role not in (models.ROLE_OFFICER, models.ROLE_ADMIN):
+        raise HTTPException(
+            status_code=403,
+            detail="Only officers or admins can reject FDRs",
+        )
+
+    fdr = db.get(models.FDRRecord, fdr_id)
+
+    if not fdr:
+        raise HTTPException(status_code=404, detail="FDR not found")
+
+    if fdr.status not in (
+        models.FDR_SUBMITTED,
+        models.FDR_UNDER_REVIEW,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot reject an FDR with status {fdr.status}",
+        )
+
+    fdr.status = models.FDR_DISCREPANCY
+    fdr.verification_remarks = data.remarks.strip()
+    fdr.verified_by_id = user.id
+    fdr.verified_at = datetime.utcnow()
+
+    db.add(models.AuditLog(
+        user_id=user.id,
+        action="FDR_REJECTED",
+        entity="fdr_record",
+        entity_id=fdr.id,
+        details=f"FDR {fdr.fdr_uid} flagged for discrepancy: {data.remarks.strip()}",
+    ))
+
+    try:
+        db.commit()
+        db.refresh(fdr)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to reject FDR")
+
+    return fdr_out(fdr)

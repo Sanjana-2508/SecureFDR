@@ -8,267 +8,301 @@ import {
   Upload,
   Download,
   FileText,
+  CheckCircle,
+  XCircle,
+  ShieldCheck,
 } from 'lucide-react'
+
 import api, { errMsg } from '../api'
 import { useAuth } from '../AuthContext'
 import StatusBadge from '../components/StatusBadge'
-import { inr, fmtDate, daysLeft, STATUS_COLORS } from '../utils'
-
-const today = new Date().toISOString().slice(0, 10)
-const nextYear = () => {
-  const d = new Date()
-  d.setFullYear(d.getFullYear() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
-const initialForm = {
-  bank_name: '',
-  reference_no: '',
-  amount: '',
-  issue_date: today,
-  maturity_date: nextYear(),
-}
+import { inr, fmtDate } from '../utils'
 
 export default function FdrList() {
   const { user } = useAuth()
 
-  const [rows, setRows] = useState(null)
+  const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [sel, setSel] = useState(null)
 
+  const [form, setForm] = useState({
+    bank_name: '',
+    reference_no: '',
+    amount: '',
+    issue_date: '',
+    maturity_date: '',
+  })
+
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(initialForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   const [documents, setDocuments] = useState([])
-  const [loadingDocs, setLoadingDocs] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [documentError, setDocumentError] = useState('')
+  const [documentSuccess, setDocumentSuccess] = useState('')
 
-  const isInst = user.role === 'INSTITUTION'
+  const [decisionRemarks, setDecisionRemarks] = useState('')
+  const [decisionLoading, setDecisionLoading] = useState(false)
 
-  const canUpload = user.role === 'INSTITUTION'
+  const isInstitution = user?.role === 'INSTITUTION'
+  const canUpload = isInstitution
 
+  const canDecide = ['OFFICER', 'ADMIN'].includes(user?.role)
+
+  // Load FDR records
+  async function loadFdrs() {
+    try {
+      const params = {}
+
+      if (q.trim()) params.q = q.trim()
+      if (status) params.status = status
+
+      const response = await api.get('/fdrs', { params })
+      setRows(response.data)
+    } catch (err) {
+      setError(errMsg(err))
+    }
+  }
+
+  // Load documents attached to an FDR
   async function loadDocuments(fdrId) {
-    setLoadingDocs(true)
-    setError('')
+    if (!fdrId) return
+
+    setDocumentError('')
+    setDocumentSuccess('')
 
     try {
       const response = await api.get(`/fdrs/${fdrId}/documents`)
       setDocuments(response.data)
-    } catch (e) {
+    } catch (err) {
       setDocuments([])
-      setError(errMsg(e))
-    } finally {
-      setLoadingDocs(false)
+      setDocumentError(errMsg(err))
     }
   }
 
+  // Upload PDF certificate
   async function uploadDocument(e) {
     e.preventDefault()
 
-    if (!sel || !selectedFile) {
-      setError('Please select a PDF certificate.')
+    if (!sel?.id) {
+      setDocumentError('Select an FDR first.')
       return
     }
 
-    if (selectedFile.type !== 'application/pdf' &&
-        !selectedFile.name.toLowerCase().endsWith('.pdf')) {
-      setError('Please select a PDF file.')
+    if (!selectedFile) {
+      setDocumentError('Please select a PDF certificate.')
+      return
+    }
+
+    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
+      setDocumentError('Please select a PDF file.')
       return
     }
 
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('The PDF must be 5 MB or smaller.')
+      setDocumentError('The PDF must be 5 MB or smaller.')
       return
     }
 
     setUploading(true)
-    setError('')
-    setSuccess('')
+    setDocumentError('')
+    setDocumentSuccess('')
 
     try {
-      const data = new FormData()
-      data.append('file', selectedFile)
-      data.append('doc_type', 'FDR_COPY')
+      const body = new FormData()
+      body.append('file', selectedFile)
 
-      await api.post(`/fdrs/${sel.id}/documents`, data)
+      await api.post(`/fdrs/${sel.id}/documents`, body)
 
       setSelectedFile(null)
-      e.target.reset()
+      setDocumentSuccess('Certificate uploaded successfully.')
 
       await loadDocuments(sel.id)
-      setSuccess('FDR certificate uploaded successfully!')
-    } catch (e) {
-      setError(errMsg(e))
+
+      const fileInput = document.getElementById('fdr-certificate-input')
+      if (fileInput) fileInput.value = ''
+    } catch (err) {
+      setDocumentError(errMsg(err))
     } finally {
       setUploading(false)
     }
   }
 
-  async function downloadDocument(document) {
-    setError('')
-
+  // Download a certificate
+  async function downloadDocument(doc) {
     try {
+      setDocumentError('');
+
       const response = await api.get(
-        `/fdrs/${sel.id}/documents/${document.id}`,
-        { responseType: 'blob' }
-      )
+        `/fdrs/${doc.fdr_id}/documents/${doc.id}`,
+        {
+          responseType: 'blob',
+        }
+      );
 
-      const url = URL.createObjectURL(response.data)
-      const link = window.document.createElement('a')
+      const blob = new Blob([response.data], {
+        type: 'application/pdf',
+      });
 
-      link.href = url
-      link.download = document.filename || 'FDR-certificate.pdf'
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
 
-      window.document.body.appendChild(link)
-      link.click()
-      link.remove()
+      link.href = url;
+      link.download = doc.filename || 'fdr-certificate.pdf';
 
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      setError('Unable to download the document. Please try again.')
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setDocumentError(errMsg(err));
     }
   }
 
-  async function loadFdrs() {
-    try {
-      const response = await api.get('/fdrs', {
-        params: {
-          q: q || undefined,
-          status: status || undefined,
-        },
-      })
-      setRows(response.data)
-    } catch (e) {
-      setError(errMsg(e))
-    }
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadFdrs()
-    }, 250)
-
-    return () => clearTimeout(timer)
-  }, [q, status])
-
-  useEffect(() => {
-    if (sel?.id) {
-      setDocuments([])
-      setSelectedFile(null)
-      loadDocuments(sel.id)
-    }
-  }, [sel?.id])
-
-  function updateField(e) {
-    const { name, value } = e.target
-    setForm((previous) => ({ ...previous, [name]: value }))
-  }
-
+  // Submit a new FDR
   async function submitFdr(e) {
     e.preventDefault()
+
+    setSaving(true)
     setError('')
     setSuccess('')
 
-    if (form.maturity_date <= form.issue_date) {
-      setError('Maturity date must be after the issue date.')
-      return
-    }
-
-    if (Number(form.amount) <= 0 || !Number.isFinite(Number(form.amount))) {
-      setError('Enter a valid amount greater than zero.')
-      return
-    }
-
-    setSaving(true)
-
     try {
       const payload = {
-        ...form,
+        bank_name: form.bank_name.trim(),
+        reference_no: form.reference_no.trim(),
         amount: Number(form.amount),
+        issue_date: form.issue_date,
+        maturity_date: form.maturity_date,
       }
 
-      const response = await api.post('/fdrs', payload)
+      if (new Date(payload.maturity_date) <= new Date(payload.issue_date)) {
+        setError('Maturity date must be after the issue date.')
+        return
+      }
 
-      setRows((previous) => {
-        const current = previous || []
-        const updated = [...current, response.data]
-        return updated.sort(
-          (a, b) => a.maturity_date.localeCompare(b.maturity_date)
-        )
-      })
+      await api.post('/fdrs', payload)
 
-      setQ('')
-      setStatus('')
-      setForm({
-        ...initialForm,
-        issue_date: today,
-        maturity_date: nextYear(),
-      })
+      setSuccess('FDR submitted successfully.')
       setShowForm(false)
-      setSuccess(
-        `FDR ${response.data.fdr_uid} submitted successfully!`
-      )
+
+      setForm({
+        bank_name: '',
+        reference_no: '',
+        amount: '',
+        issue_date: '',
+        maturity_date: '',
+      })
 
       await loadFdrs()
-    } catch (e) {
-      setError(errMsg(e))
+    } catch (err) {
+      setError(errMsg(err))
     } finally {
       setSaving(false)
     }
   }
 
+  // Verify or flag an FDR for discrepancy
+  async function decideFdr(action) {
+    if (!sel?.id) return
+
+    const remarks = decisionRemarks.trim()
+
+    if (remarks.length < 3) {
+      setDocumentError('Please enter at least 3 characters for the remarks.')
+      return
+    }
+
+    const confirmed =
+      action === 'verify'
+        ? window.confirm('Are you sure you want to verify this FDR?')
+        : window.confirm('Are you sure you want to flag this FDR for discrepancy?')
+
+    if (!confirmed) return
+
+    setDecisionLoading(true)
+    setDocumentError('')
+    setDocumentSuccess('')
+    setSuccess('')
+
+    try {
+      await api.post(`/fdrs/${sel.id}/${action}`, {
+        remarks,
+      })
+
+      setDecisionRemarks('')
+
+      setDocumentSuccess(
+        action === 'verify'
+          ? 'FDR verified successfully. Verification is simulated.'
+          : 'FDR flagged for discrepancy successfully.'
+      )
+
+      // Refresh the selected record and the list
+      const response = await api.get(`/fdrs/${sel.id}`)
+      setSel(response.data)
+
+      await loadFdrs()
+    } catch (err) {
+      setDocumentError(errMsg(err))
+    } finally {
+      setDecisionLoading(false)
+    }
+  }
+
+  // Fetch records when the page opens or filters change
+  useEffect(() => {
+    loadFdrs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, status])
+
+  // Fetch documents whenever a record is selected
+  useEffect(() => {
+    if (sel?.id) {
+      loadDocuments(sel.id)
+    } else {
+      setDocuments([])
+      setSelectedFile(null)
+      setDecisionRemarks('')
+      setDocumentError('')
+      setDocumentSuccess('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.id])
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">
-          {isInst ? 'My FDR Records' : 'FDR Records'}
-        </h1>
-
-        <div className="flex flex-wrap gap-2">
-          <label className="input input-bordered input-sm flex items-center gap-2">
-            <Search size={14} />
-            <input
-              className="grow"
-              placeholder="Search bank / reference"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </label>
-
-          <select
-            className="select select-bordered select-sm"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">All statuses</option>
-            {Object.keys(STATUS_COLORS).map((s) => (
-              <option key={s} value={s}>
-                {s.replaceAll('_', ' ')}
-              </option>
-            ))}
-          </select>
-
-          {isInst && (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                setError('')
-                setSuccess('')
-                setShowForm(true)
-              }}
-            >
-              <Plus size={16} />
-              Add FDR
-            </button>
-          )}
+    <div className="space-y-6">
+      {/* Page heading */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">FDR Records</h1>
+          <p className="mt-1 text-sm opacity-70">
+            Manage security deposits and fixed deposit receipts.
+          </p>
         </div>
+
+        {isInstitution && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setError('')
+              setSuccess('')
+              setShowForm(true)
+            }}
+          >
+            <Plus size={18} />
+            Submit FDR
+          </button>
+        )}
       </div>
 
+      {/* Notifications */}
       {error && (
         <div className="alert alert-error">
           <span>{error}</span>
@@ -276,6 +310,7 @@ export default function FdrList() {
             type="button"
             className="btn btn-ghost btn-xs"
             onClick={() => setError('')}
+            aria-label="Dismiss error"
           >
             <X size={16} />
           </button>
@@ -289,117 +324,210 @@ export default function FdrList() {
             type="button"
             className="btn btn-ghost btn-xs"
             onClick={() => setSuccess('')}
+            aria-label="Dismiss success message"
           >
             <X size={16} />
           </button>
         </div>
       )}
 
-      {showForm && isInst && (
-        <div className="card bg-base-100 shadow-md">
-          <div className="card-body">
+      {/* Search and filters */}
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body">
+          <div className="flex flex-col gap-3 md:flex-row">
+            <label className="input input-bordered flex flex-1 items-center gap-2">
+              <Search size={18} className="opacity-60" />
+
+              <input
+                type="text"
+                className="grow"
+                placeholder="Search bank or reference number..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </label>
+
+            <select
+              className="select select-bordered w-full md:w-56"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="">All statuses</option>
+              <option value="SUBMITTED">Submitted</option>
+              <option value="UNDER_REVIEW">Under Review</option>
+              <option value="DISCREPANCY">Discrepancy</option>
+              <option value="VERIFIED">Verified</option>
+              <option value="MATURED">Matured</option>
+              <option value="RENEWED">Renewed</option>
+              <option value="RELEASED">Released</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* FDR table */}
+      <div className="overflow-x-auto rounded-xl bg-base-100 shadow-sm">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>FDR ID</th>
+              {!isInstitution && <th>Institution</th>}
+              <th>Bank</th>
+              <th>Reference No.</th>
+              <th>Amount</th>
+              <th>Maturity Date</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((fdr) => (
+              <tr key={fdr.id}>
+                <td className="font-medium">
+                  {fdr.fdr_uid || `FDR-${fdr.id}`}
+                </td>
+
+                {!isInstitution && (
+                  <td>{fdr.institution || '—'}</td>
+                )}
+
+                <td>{fdr.bank_name}</td>
+                <td>{fdr.reference_no}</td>
+
+                <td>{inr(fdr.amount)}</td>
+                <td>{fmtDate(fdr.maturity_date)}</td>
+
+                <td>
+                  <StatusBadge status={fdr.status} />
+                </td>
+
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => {
+                      setSel(fdr)
+                      setDocumentError('')
+                      setDocumentSuccess('')
+                    }}
+                  >
+                    <Eye size={16} />
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={isInstitution ? 7 : 8}
+                  className="py-10 text-center opacity-60"
+                >
+                  No FDR records found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Submit FDR modal */}
+      {showForm && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-xl">
             <div className="flex items-center justify-between">
-              <h2 className="card-title">Submit a New FDR</h2>
+              <h2 className="text-xl font-bold">Submit New FDR</h2>
+
               <button
                 type="button"
-                className="btn btn-ghost btn-sm btn-square"
+                className="btn btn-ghost btn-sm btn-circle"
                 onClick={() => setShowForm(false)}
-                disabled={saving}
                 aria-label="Close form"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <p className="text-sm text-base-content/60">
-              Enter the FDR details for your institution. The record will
-              be submitted for officer review.
-            </p>
+            <form onSubmit={submitFdr} className="mt-5 space-y-4">
+              <label className="form-control">
+                <span className="label-text mb-1">Bank Name</span>
+                <input
+                  className="input input-bordered"
+                  required
+                  minLength={2}
+                  maxLength={150}
+                  value={form.bank_name}
+                  onChange={(e) =>
+                    setForm({ ...form, bank_name: e.target.value })
+                  }
+                  placeholder="Enter bank name"
+                />
+              </label>
 
-            <form onSubmit={submitFdr} className="space-y-4 mt-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="form-control">
-                  <span className="label-text mb-1">Bank name *</span>
-                  <input
-                    className="input input-bordered"
-                    name="bank_name"
-                    value={form.bank_name}
-                    onChange={updateField}
-                    placeholder="e.g. State Bank of India"
-                    minLength={2}
-                    maxLength={150}
-                    required
-                  />
-                </label>
+              <label className="form-control">
+                <span className="label-text mb-1">FDR Reference Number</span>
+                <input
+                  className="input input-bordered"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  value={form.reference_no}
+                  onChange={(e) =>
+                    setForm({ ...form, reference_no: e.target.value })
+                  }
+                  placeholder="Enter reference number"
+                />
+              </label>
 
-                <label className="form-control">
-                  <span className="label-text mb-1">
-                    FDR reference number *
-                  </span>
-                  <input
-                    className="input input-bordered"
-                    name="reference_no"
-                    value={form.reference_no}
-                    onChange={updateField}
-                    placeholder="e.g. SBI-FDR-7001"
-                    minLength={2}
-                    maxLength={100}
-                    required
-                  />
-                </label>
+              <label className="form-control">
+                <span className="label-text mb-1">Amount (₹)</span>
+                <input
+                  type="number"
+                  className="input input-bordered"
+                  required
+                  min="0.01"
+                  max="1000000000000"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(e) =>
+                    setForm({ ...form, amount: e.target.value })
+                  }
+                  placeholder="Enter amount"
+                />
+              </label>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="form-control">
-                  <span className="label-text mb-1">
-                    Amount (₹) *
-                  </span>
+                  <span className="label-text mb-1">Issue Date</span>
                   <input
-                    className="input input-bordered"
-                    type="number"
-                    name="amount"
-                    value={form.amount}
-                    onChange={updateField}
-                    placeholder="500000"
-                    min="0.01"
-                    max="1000000000000"
-                    step="0.01"
-                    required
-                  />
-                </label>
-
-                <label className="form-control">
-                  <span className="label-text mb-1">Issue date *</span>
-                  <input
-                    className="input input-bordered"
                     type="date"
-                    name="issue_date"
+                    className="input input-bordered"
+                    required
                     value={form.issue_date}
-                    onChange={updateField}
-                    required
+                    onChange={(e) =>
+                      setForm({ ...form, issue_date: e.target.value })
+                    }
                   />
                 </label>
 
-                <label className="form-control md:col-span-2">
-                  <span className="label-text mb-1">
-                    Maturity date *
-                  </span>
+                <label className="form-control">
+                  <span className="label-text mb-1">Maturity Date</span>
                   <input
-                    className="input input-bordered"
                     type="date"
-                    name="maturity_date"
-                    value={form.maturity_date}
-                    onChange={updateField}
-                    min={form.issue_date}
+                    className="input input-bordered"
                     required
+                    min={form.issue_date || undefined}
+                    value={form.maturity_date}
+                    onChange={(e) =>
+                      setForm({ ...form, maturity_date: e.target.value })
+                    }
                   />
                 </label>
               </div>
 
-              <div className="alert alert-info text-sm">
-                The record will be marked SUBMITTED. Bank verification is
-                not performed by this form.
-              </div>
-
-              <div className="flex justify-end gap-2">
+              <div className="modal-action">
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -414,205 +542,310 @@ export default function FdrList() {
                   className="btn btn-primary"
                   disabled={saving}
                 >
-                  {saving ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit FDR'
+                  {saving && (
+                    <Loader2 size={16} className="animate-spin" />
                   )}
+                  Submit FDR
                 </button>
               </div>
             </form>
           </div>
-        </div>
+
+          <div
+            className="modal-backdrop"
+            onClick={() => !saving && setShowForm(false)}
+          />
+        </dialog>
       )}
 
-      <div className="card bg-base-100 shadow-sm">
-        <div className="overflow-x-auto">
-          {!rows ? (
-            <div className="flex justify-center py-16">
-              <span className="loading loading-spinner text-primary" />
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">
-              No FDR records match your filters
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Reference / Bank</th>
-                  {!isInst && <th>Institution</th>}
-                  <th>Amount</th>
-                  <th>Issue</th>
-                  <th>Maturity</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-
-              <tbody>
-                {rows.map((f) => (
-                  <tr key={f.id} className="hover">
-                    <td className="text-xs text-slate-500">
-                      {f.fdr_uid}
-                    </td>
-
-                    <td className="font-medium">
-                      {f.reference_no}
-                      <div className="text-xs text-slate-400">
-                        {f.bank_name}
-                      </div>
-                    </td>
-
-                    {!isInst && <td className="text-sm">{f.institution}</td>}
-
-                    <td>{inr(f.amount)}</td>
-                    <td className="text-sm">{fmtDate(f.issue_date)}</td>
-                    <td className="text-sm">{fmtDate(f.maturity_date)}</td>
-
-                    <td>
-                      <StatusBadge status={f.status} />
-                    </td>
-
-                    <td>
-                      <button
-                        className="btn btn-ghost btn-xs"
-                        onClick={() => setSel(f)}
-                        aria-label={`View ${f.reference_no}`}
-                      >
-                        <Eye size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
+      {/* FDR details modal */}
       {sel && (
         <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              {sel.reference_no}
-              <StatusBadge status={sel.status} />
-            </h3>
+          <div className="modal-box max-w-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold">
+                  {sel.fdr_uid || `FDR-${sel.id}`}
+                </h2>
 
-            <div className="grid grid-cols-2 gap-3 my-4 text-sm">
-              {[
-                ['FDR ID', sel.fdr_uid],
-                ['Institution', sel.institution],
-                ['Bank', sel.bank_name],
-                ['Amount', inr(sel.amount)],
-                ['Issue date', fmtDate(sel.issue_date)],
-                ['Maturity date', fmtDate(sel.maturity_date)],
-                ['Days to maturity', daysLeft(sel.maturity_date)],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <div className="text-xs text-slate-400">{k}</div>
-                  <div className="font-medium">{v}</div>
+                <p className="text-sm opacity-70">
+                  FDR details and document management
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-circle"
+                onClick={() => setSel(null)}
+                aria-label="Close details"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* FDR information */}
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {!isInstitution && (
+                <div>
+                  <p className="text-sm opacity-60">Institution</p>
+                  <p className="font-medium">{sel.institution || '—'}</p>
                 </div>
-              ))}
+              )}
+
+              <div>
+                <p className="text-sm opacity-60">Bank</p>
+                <p className="font-medium">{sel.bank_name}</p>
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Reference Number</p>
+                <p className="font-medium">{sel.reference_no}</p>
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Amount</p>
+                <p className="font-medium">
+                  {inr(sel.amount)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Issue Date</p>
+                <p className="font-medium">
+                  {fmtDate(sel.issue_date)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Maturity Date</p>
+                <p className="font-medium">
+                  {fmtDate(sel.maturity_date)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Status</p>
+                <StatusBadge status={sel.status} />
+              </div>
+
+              <div>
+                <p className="text-sm opacity-60">Verification Type</p>
+                <p className="font-medium">
+                  {sel.is_simulated_verification
+                    ? 'Simulated verification'
+                    : 'Not specified'}
+                </p>
+              </div>
+
+              {sel.verification_remarks && (
+                <div className="sm:col-span-2">
+                  <p className="text-sm opacity-60">
+                    Verification Remarks
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap">
+                    {sel.verification_remarks}
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="alert alert-warning py-2 text-xs">
-              Verification shown here is simulated sample data — no bank
-              integration.
+            <div className="alert alert-warning mt-5 py-2 text-xs">
+              Verification shown here is simulated sample data. No live bank
+              verification is performed.
             </div>
-            
-            <div className="divider">FDR Documents</div>
 
-              {canUpload && (
-                <form onSubmit={uploadDocument} className="space-y-3">
+            {/* Officer verification/rejection */}
+            {canDecide &&
+              ['SUBMITTED', 'UNDER_REVIEW'].includes(sel.status) && (
+                <div className="mt-5 space-y-3 rounded-xl border p-4">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <ShieldCheck size={18} />
+                    Officer Decision
+                  </div>
+
                   <label className="form-control">
                     <span className="label-text mb-1">
-                      Upload certificate (PDF, max 5 MB)
+                      Verification remarks / rejection reason
                     </span>
 
-                    <input
-                      type="file"
-                      accept=".pdf,application/pdf"
-                      className="file-input file-input-bordered w-full"
+                    <textarea
+                      className="textarea textarea-bordered w-full"
+                      placeholder="Enter your review remarks..."
+                      value={decisionRemarks}
                       onChange={(e) =>
-                        setSelectedFile(e.target.files?.[0] || null)
+                        setDecisionRemarks(e.target.value)
                       }
+                      minLength={3}
+                      maxLength={1000}
+                      rows={3}
+                      disabled={decisionLoading}
                     />
                   </label>
 
-                  <button
-                    type="submit"
-                    className="btn btn-primary btn-sm"
-                    disabled={!selectedFile || uploading}
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={16} />
-                        Upload Certificate
-                      </>
-                    )}
-                  </button>
-                </form>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-success btn-sm"
+                      disabled={
+                        decisionLoading ||
+                        decisionRemarks.trim().length < 3
+                      }
+                      onClick={() => decideFdr('verify')}
+                    >
+                      {decisionLoading ? (
+                        <Loader2
+                          size={16}
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <CheckCircle size={16} />
+                      )}
+                      Verify FDR
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-error btn-outline btn-sm"
+                      disabled={
+                        decisionLoading ||
+                        decisionRemarks.trim().length < 3
+                      }
+                      onClick={() => decideFdr('reject')}
+                    >
+                      {decisionLoading ? (
+                        <Loader2
+                          size={16}
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <XCircle size={16} />
+                      )}
+                      Reject / Flag Discrepancy
+                    </button>
+                  </div>
+                </div>
               )}
 
-              <div className="space-y-2 mt-4">
-                <h4 className="font-semibold text-sm">Uploaded certificates</h4>
+            {/* Document management */}
+            <div className="divider">FDR Documents</div>
 
-                {loadingDocs ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Loader2 size={16} className="animate-spin" />
-                    Loading documents...
-                  </div>
-                ) : documents.length === 0 ? (
-                  <p className="text-sm text-base-content/60">
-                    No documents uploaded for this FDR yet.
-                  </p>
-                ) : (
-                  documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border p-3"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText size={20} className="shrink-0" />
+            {canUpload && (
+              <form
+                onSubmit={uploadDocument}
+                className="space-y-3 rounded-xl border p-4"
+              >
+                <div className="flex items-center gap-2 font-semibold">
+                  <Upload size={18} />
+                  Upload FDR Certificate
+                </div>
 
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium break-all">
-                            {doc.filename}
-                          </p>
-                          <p className="text-xs text-base-content/60">
-                            {doc.doc_type} ·{' '}
-                            {doc.uploaded_at
-                              ? new Date(doc.uploaded_at).toLocaleString()
-                              : 'Date unavailable'}
-                          </p>
-                        </div>
-                      </div>
+                <p className="text-xs opacity-70">
+                  PDF only. Maximum file size: 5 MB.
+                </p>
 
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm shrink-0"
-                        onClick={() => downloadDocument(doc)}
-                      >
-                        <Download size={15} />
-                        Download
-                      </button>
-                    </div>
-                  ))
-                )}
+                <input
+                  id="fdr-certificate-input"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="file-input file-input-bordered w-full"
+                  onChange={(e) => {
+                    setSelectedFile(e.target.files?.[0] || null)
+                    setDocumentError('')
+                    setDocumentSuccess('')
+                  }}
+                  disabled={uploading}
+                />
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={uploading || !selectedFile}
+                >
+                  {uploading ? (
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Upload size={16} />
+                  )}
+                  Upload Certificate
+                </button>
+              </form>
+            )}
+
+            {/* Document messages */}
+            {documentError && (
+              <div className="alert alert-error mt-3">
+                <span>{documentError}</span>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setDocumentError('')}
+                  aria-label="Dismiss document error"
+                >
+                  <X size={16} />
+                </button>
               </div>
+            )}
+
+            {documentSuccess && (
+              <div className="alert alert-success mt-3">
+                <span>{documentSuccess}</span>
+              </div>
+            )}
+
+            {/* Uploaded documents */}
+            <div className="mt-4 space-y-2">
+              <h3 className="font-semibold">Uploaded Certificates</h3>
+
+              {documents.length === 0 ? (
+                <p className="py-3 text-sm opacity-60">
+                  No certificates uploaded for this FDR.
+                </p>
+              ) : (
+                documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <FileText
+                        size={20}
+                        className="shrink-0 opacity-70"
+                      />
+
+                      <div className="min-w-0">
+                        <p className="break-all text-sm font-medium">
+                          {doc.original_filename || 'FDR certificate'}
+                        </p>
+
+                        {doc.created_at && (
+                          <p className="text-xs opacity-60">
+                            Uploaded: {fmtDate(doc.created_at)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm shrink-0"
+                      onClick={() => downloadDocument(doc)}
+                    >
+                      <Download size={16} />
+                      Download
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
             <div className="modal-action">
               <button
-                className="btn btn-sm"
+                type="button"
+                className="btn"
                 onClick={() => setSel(null)}
               >
                 Close
