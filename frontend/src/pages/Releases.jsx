@@ -14,6 +14,15 @@ import { inr, fmtDate } from '../utils'
 
 const initialForm = { fdr_id: '', reason: '' }
 
+const ACTIVE_RELEASE_STATUSES = [
+  'SUBMITTED',
+  'UNDER_REVIEW',
+  'OBSERVATION_RAISED',
+  'RESUBMITTED',
+  'APPROVED',
+  'RELEASE_RECORDED',
+]
+
 const ACTIONS = [
   { value: 'REVIEW', label: 'Start review' },
   { value: 'OBSERVATION', label: 'Raise observation' },
@@ -34,24 +43,45 @@ export default function Releases() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [workingId, setWorkingId] = useState(null)
+  const [requestsLoadError, setRequestsLoadError] = useState('')
+  const [fdrsLoadError, setFdrsLoadError] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   async function loadData() {
     setLoading(true)
     setError('')
+    setRequestsLoadError('')
+    setFdrsLoadError('')
+
     try {
       const jobs = [api.get('/release-requests')]
       if (isInstitution) jobs.push(api.get('/fdrs'))
 
-      const results = await Promise.all(jobs)
-      setRequests(Array.isArray(results[0].data) ? results[0].data : [])
+      const results = await Promise.allSettled(jobs)
+      const [requestsResult, fdrsResult] = results
 
-      if (isInstitution) {
-        setFdrs(Array.isArray(results[1].data) ? results[1].data : [])
+      if (requestsResult.status === 'fulfilled') {
+        setRequests(
+          Array.isArray(requestsResult.value.data)
+            ? requestsResult.value.data
+            : []
+        )
+      } else {
+        setRequests([])
+        setRequestsLoadError(errMsg(requestsResult.reason))
       }
-    } catch (err) {
-      setError(errMsg(err))
+
+      if (isInstitution && fdrsResult) {
+        if (fdrsResult.status === 'fulfilled') {
+          setFdrs(
+            Array.isArray(fdrsResult.value.data) ? fdrsResult.value.data : []
+          )
+        } else {
+          setFdrs([])
+          setFdrsLoadError(errMsg(fdrsResult.reason))
+        }
+      }
     } finally {
       setLoading(false)
     }
@@ -61,7 +91,13 @@ export default function Releases() {
     loadData()
   }, [])
 
-  const eligibleFdrs = fdrs.filter((f) => f.status === 'VERIFIED')
+  const verifiedFdrs = fdrs.filter((f) => f.status === 'VERIFIED')
+  const activeFdrIds = new Set(
+    requests
+      .filter((request) => ACTIVE_RELEASE_STATUSES.includes(request.status))
+      .map((request) => request.fdr_id)
+  )
+  const eligibleFdrs = verifiedFdrs.filter((f) => !activeFdrIds.has(f.id))
 
   async function createRequest(e) {
     e.preventDefault()
@@ -210,9 +246,24 @@ export default function Releases() {
               Submit a request for review. A matured FDR is not released until its release workflow is approved and recorded.
             </p>
 
-            {eligibleFdrs.length === 0 ? (
+            {loading ? (
+              <p className="text-sm opacity-70">Loading FDRs and release requests…</p>
+            ) : fdrsLoadError ? (
+              <div className="alert alert-error">
+                Unable to load FDRs: {fdrsLoadError}
+              </div>
+            ) : requestsLoadError ? (
+              <div className="alert alert-error">
+                Unable to check existing release requests. Refresh before
+                submitting a new request.
+              </div>
+            ) : eligibleFdrs.length === 0 ? (
               <p className="text-sm opacity-70">
-                No verified FDRs are available for a release request.
+                {fdrs.length === 0
+                  ? 'No FDR records are assigned to your institution yet.'
+                  : verifiedFdrs.length === 0
+                    ? 'No FDRs currently have VERIFIED status. An officer must verify an FDR before it can be requested; maturity alone does not release an FDR.'
+                    : 'All verified FDRs already have a release request in progress or recorded.'}
               </p>
             ) : (
               <form onSubmit={createRequest} className="space-y-4">
@@ -282,6 +333,10 @@ export default function Releases() {
             <div className="flex justify-center py-10">
               <span className="loading loading-spinner loading-lg" />
             </div>
+          ) : requestsLoadError ? (
+            <p className="alert alert-error">
+              Unable to load release requests: {requestsLoadError}
+            </p>
           ) : requests.length === 0 ? (
             <p className="py-8 text-center text-sm opacity-60">
               No release requests found.

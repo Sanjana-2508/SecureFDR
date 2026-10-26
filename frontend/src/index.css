@@ -203,9 +203,19 @@ button {
 }
 
 .dashboard-metric {
-  overflow: hidden;
   position: relative;
   transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.dashboard-metric .card-body {
+  min-height: 10rem;
+}
+
+.dashboard-metric-value {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.05rem, 1.4vw, 1.5rem);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .dashboard-metric:hover {
@@ -222,12 +232,39 @@ button {
   border-radius: 12px;
 }
 
+.dashboard-chart-card {
+  min-width: 0;
+}
+
+.dashboard-status-chart,
+.dashboard-maturity-chart {
+  min-width: 0;
+  width: 100%;
+}
+
+.dashboard-status-legend ul {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.dashboard-status-legend li {
+  margin: 0 !important;
+  white-space: nowrap;
+}
+
 .table-shell {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid #e5eaf2;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 3px 14px rgb(25 46 79 / 4%);
+}
+
+.fdr-records-table {
+  table-layout: auto;
 }
 
 .workflow-item {
@@ -252,6 +289,10 @@ button {
 
   .table {
     font-size: 0.82rem;
+  }
+
+  .dashboard-metric .card-body {
+    min-height: 9rem;
   }
 
   .space-y-6 > div:first-child h1,

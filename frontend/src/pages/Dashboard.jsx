@@ -5,6 +5,7 @@ import {
   BarChart,
   Cell,
   Legend,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -20,15 +21,15 @@ import { inr, fmtDate, STATUS_COLORS } from '../utils'
 function Stat({ icon: Icon, label, value, color }) {
   return (
     <div className="card dashboard-metric bg-white">
-      <div className="card-body flex-row items-center gap-4 p-5">
+      <div className="card-body flex-col items-start gap-3 p-4 2xl:p-5">
         <div className={`dashboard-metric-icon ${color}`}>
           <Icon size={21} strokeWidth={1.8} />
         </div>
         <div className="min-w-0">
-          <div className="text-2xl font-bold tracking-tight text-slate-900">
+          <div className="dashboard-metric-value text-xl font-bold tracking-tight text-slate-900">
             {value}
           </div>
-          <div className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">
+          <div className="mt-1 min-h-10 text-xs font-medium leading-5 text-slate-500 sm:text-sm">
             {label}
           </div>
         </div>
@@ -98,7 +99,7 @@ export default function Dashboard() {
         </span>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Stat icon={FileStack} label={isInst ? 'My FDRs' : 'Total FDRs'} value={fdrs.length} color="bg-blue-100 text-blue-700" />
         <Stat icon={Wallet} label="Total deposit value" value={inr(fdrs.reduce((s, f) => s + f.amount, 0))} color="bg-emerald-100 text-emerald-700" />
         <Stat icon={CalendarClock} label="Maturing within 60 days" value={upcoming.length} color="bg-amber-100 text-amber-700" />
@@ -106,8 +107,8 @@ export default function Dashboard() {
         <Stat icon={AlertTriangle} label={isInst ? 'Awaiting verification / action' : 'Pending verification'} value={attention.length} color="bg-red-100 text-red-700" />
       </div>
 
-      <div className="grid xl:grid-cols-5 gap-4">
-        <div className="card bg-white xl:col-span-2"><div className="card-body p-5 md:p-6">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-5">
+        <div className="card dashboard-chart-card min-w-0 bg-white xl:col-span-2"><div className="card-body p-5 md:p-6">
           <div className="mb-1">
             <h2 className="card-title text-base">FDR status distribution</h2>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">Matured combines formally matured FDRs and active records past their maturity date. Other slices show stored workflow status.</p>
@@ -115,15 +116,17 @@ export default function Dashboard() {
           {statusChart.length === 0 ? (
             <div className="flex h-72 items-center justify-center text-sm text-slate-400">No FDR records to display.</div>
           ) : (
-            <div className="h-72">
+            <div className="dashboard-status-chart h-72">
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
                     data={statusChart}
                     dataKey="value"
                     nameKey="name"
+                    cx="50%"
+                    cy="43%"
                     innerRadius="52%"
-                    outerRadius="76%"
+                    outerRadius="68%"
                     paddingAngle={2}
                   >
                     {statusChart.map((item) => (
@@ -134,26 +137,38 @@ export default function Dashboard() {
                     contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
                     formatter={(value, name) => [value, name]}
                   />
-                  <Legend verticalAlign="bottom" height={38} wrapperStyle={{ fontSize: 11 }} />
+                  <Legend
+                    className="dashboard-status-legend"
+                    layout="horizontal"
+                    align="center"
+                    verticalAlign="bottom"
+                    height={56}
+                    wrapperStyle={{ fontSize: 10, lineHeight: '18px' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           )}
         </div></div>
 
-        <div className="card bg-white xl:col-span-3"><div className="card-body p-5 md:p-6">
+        <div className="card dashboard-chart-card min-w-0 bg-white xl:col-span-3"><div className="card-body p-5 md:p-6">
           <div className="mb-1">
             <h2 className="card-title text-base">Maturity overview</h2>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">Date-derived counts for active FDRs; renewed and released records are excluded.</p>
           </div>
           {active.length === 0 ? (
             <div className="flex h-72 items-center justify-center text-sm text-slate-400">No active FDRs to assess for maturity.</div>
+          ) : upcoming.length === 0 && overdue.length === 0 ? (
+            <div className="flex h-72 flex-col items-center justify-center text-center">
+              <p className="font-medium text-slate-600">No upcoming or overdue maturities.</p>
+              <p className="mt-1 text-sm text-slate-400">Active FDRs are outside the 60-day maturity window.</p>
+            </div>
           ) : (
-            <div className="h-72">
+            <div className="dashboard-maturity-chart h-72">
               <ResponsiveContainer>
-                <BarChart data={maturityChart} margin={{ left: 0, right: 12, top: 12, bottom: 4 }}>
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <BarChart data={maturityChart} margin={{ left: 4, right: 16, top: 24, bottom: 12 }} barCategoryGap="30%">
+                  <XAxis dataKey="name" interval={0} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} domain={[0, (max) => Math.max(max, 1)]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip
                     cursor={{ fill: '#f3f6fb' }}
                     contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
@@ -161,6 +176,7 @@ export default function Dashboard() {
                   />
                   <Bar dataKey="value" name="FDRs" radius={[5, 5, 0, 0]} maxBarSize={64}>
                     {maturityChart.map((item) => <Cell key={item.name} fill={item.color} />)}
+                    <LabelList dataKey="value" position="top" fill="#475569" fontSize={12} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

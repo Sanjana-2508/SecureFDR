@@ -384,47 +384,47 @@ export default function FdrList() {
 
       {/* FDR table */}
       <div className="table-shell overflow-x-auto">
-        <table className="table">
+        <table className={`table fdr-records-table ${isInstitution ? 'min-w-[1000px]' : 'min-w-[1200px]'}`}>
           <thead>
             <tr>
-              <th>FDR ID</th>
-              {!isInstitution && <th>Institution</th>}
-              <th>Bank</th>
-              <th>Reference No.</th>
-              <th>Amount</th>
-              <th>Issue Date</th>
-              <th>Maturity Date</th>
-              <th>Status</th>
-              <th>Action</th>
+              <th className="w-28">FDR ID</th>
+              {!isInstitution && <th className="w-48">Institution</th>}
+              <th className="w-44">Bank</th>
+              <th className="w-40">Reference No.</th>
+              <th className="w-36 text-right">Amount</th>
+              <th className="w-32">Issue Date</th>
+              <th className="w-36">Maturity Date</th>
+              <th className="w-32 text-center">Status</th>
+              <th className="w-28 text-center">Action</th>
             </tr>
           </thead>
 
           <tbody>
             {rows.map((fdr) => (
               <tr key={fdr.id}>
-                <td className="font-medium">
+                <td className="whitespace-nowrap font-medium">
                   {fdr.fdr_uid || `FDR-${fdr.id}`}
                 </td>
 
                 {!isInstitution && (
-                  <td>{fdr.institution || '—'}</td>
+                  <td className="whitespace-nowrap">{fdr.institution || '—'}</td>
                 )}
 
-                <td>{fdr.bank_name}</td>
-                <td>{fdr.reference_no}</td>
+                <td className="whitespace-nowrap" title={fdr.bank_name}>{fdr.bank_name}</td>
+                <td className="whitespace-nowrap" title={fdr.reference_no}>{fdr.reference_no}</td>
 
-                <td>{inr(fdr.amount)}</td>
-                <td>{fmtDate(fdr.issue_date)}</td>
-                <td>{fmtDate(fdr.maturity_date)}</td>
+                <td className="whitespace-nowrap text-right tabular-nums">{inr(fdr.amount)}</td>
+                <td className="whitespace-nowrap tabular-nums">{fmtDate(fdr.issue_date)}</td>
+                <td className="whitespace-nowrap tabular-nums">{fmtDate(fdr.maturity_date)}</td>
 
-                <td>
+                <td className="text-center">
                   <StatusBadge status={fdr.status} />
                 </td>
 
-                <td>
+                <td className="text-center">
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline"
+                    className="btn btn-sm btn-outline mx-auto inline-flex min-w-24 items-center justify-center gap-1.5 whitespace-nowrap"
                     onClick={() => {
                       setSel(fdr)
                       setDocumentError('')
