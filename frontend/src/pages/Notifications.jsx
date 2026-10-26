@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ShieldAlert,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import api, { errMsg } from '../api'
 import { useAuth } from '../AuthContext'
 import { fmtDate } from '../utils'
@@ -276,6 +277,14 @@ export default function Notifications() {
                           {item.fdr_id != null &&
                             ` · FDR record #${item.fdr_id}`}
                         </p>
+                        {item.fdr_id != null && (
+                          <Link
+                            className="link link-primary mt-2 inline-block text-sm"
+                            to={`/fdrs?fdrId=${encodeURIComponent(item.fdr_id)}`}
+                          >
+                            View FDR record
+                          </Link>
+                        )}
                       </div>
                     </div>
 

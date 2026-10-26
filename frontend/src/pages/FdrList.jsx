@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Search,
   Eye,
@@ -20,6 +21,7 @@ import { inr, fmtDate } from '../utils'
 
 export default function FdrList() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
@@ -260,6 +262,21 @@ export default function FdrList() {
     loadFdrs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, status])
+
+  useEffect(() => {
+    const requestedId = Number(searchParams.get('fdrId'))
+    if (!requestedId || rows.length === 0) return
+
+    const requestedRecord = rows.find((record) => record.id === requestedId)
+    if (requestedRecord) {
+      setSel(requestedRecord)
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        next.delete('fdrId')
+        return next
+      }, { replace: true })
+    }
+  }, [rows, searchParams, setSearchParams])
 
   // Fetch documents whenever a record is selected
   useEffect(() => {

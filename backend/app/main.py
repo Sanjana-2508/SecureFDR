@@ -33,19 +33,23 @@ async def _daily_maturity_alert_scans():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scan_task = asyncio.create_task(
-        _daily_maturity_alert_scans(),
-        name="daily-maturity-alert-scans",
-    )
-    app.state.maturity_scan_task = scan_task
+    scan_task = getattr(app.state, "maturity_scan_task", None)
+    owns_scan_task = scan_task is None or scan_task.done()
+    if owns_scan_task:
+        scan_task = asyncio.create_task(
+            _daily_maturity_alert_scans(),
+            name="daily-maturity-alert-scans",
+        )
+        app.state.maturity_scan_task = scan_task
     try:
         yield
     finally:
-        scan_task.cancel()
-        try:
-            await scan_task
-        except asyncio.CancelledError:
-            pass
+        if owns_scan_task:
+            scan_task.cancel()
+            try:
+                await scan_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(

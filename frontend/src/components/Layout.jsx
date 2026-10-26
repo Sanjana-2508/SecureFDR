@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ClipboardList,
   Bell,
+  Building2,
 } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 
@@ -54,6 +55,12 @@ const MENU = [
     to: '/users',
     label: 'Users',
     icon: Users,
+    roles: ['ADMIN'],
+  },
+  {
+    to: '/institutions',
+    label: 'Institutions',
+    icon: Building2,
     roles: ['ADMIN'],
   },
 ]

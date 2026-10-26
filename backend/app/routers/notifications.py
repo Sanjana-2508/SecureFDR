@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from threading import Lock
 from typing import Optional
 
@@ -14,6 +14,7 @@ router = APIRouter(
     tags=["Notifications"],
 )
 
+MATURITY_ALERT_WINDOW_DAYS = 60
 _maturity_scan_lock = Lock()
 
 def generate_maturity_alerts_for_all(
@@ -29,8 +30,14 @@ def _generate_maturity_alerts_for_all(
     today: Optional[date] = None,
 ):
     """Create deduplicated maturity alerts for authorized recipients."""
-    today = today or date.today()
-    alert_window = today + timedelta(days=30)
+    today = today or datetime.now(timezone.utc).date()
+    window_setting = db.get(models.AppSetting, "alert_days_first")
+    alert_window_days = (
+        int(window_setting.value)
+        if window_setting
+        else MATURITY_ALERT_WINDOW_DAYS
+    )
+    alert_window = today + timedelta(days=alert_window_days)
 
     upcoming_fdrs = (
         db.query(models.FDRRecord)
@@ -44,7 +51,9 @@ def _generate_maturity_alerts_for_all(
     overdue_fdrs = (
         db.query(models.FDRRecord)
         .filter(
-            models.FDRRecord.status == models.FDR_VERIFIED,
+            models.FDRRecord.status.in_(
+                (models.FDR_VERIFIED, models.FDR_MATURED)
+            ),
             models.FDRRecord.maturity_date < today,
         )
         .all()
@@ -163,6 +172,7 @@ def _generate_maturity_alerts_for_all(
     return {
         "message": "Maturity-alert scan completed.",
         "scan_date": today.isoformat(),
+        "monitoring_window_days": alert_window_days,
         "upcoming_fdrs_found": len(upcoming_fdrs),
         "overdue_fdrs_found": len(overdue_fdrs),
         "notifications_created": created_count,
@@ -270,8 +280,9 @@ def generate_maturity_alerts(
     Officers/admins can trigger a maturity-alert scan manually.
 
     Creates:
-    - Upcoming maturity alerts for FDRs maturing within 30 days.
-    - Overdue alerts for FDRs past maturity that remain verified.
+    - Upcoming maturity alerts for verified FDRs maturing within the
+      configured 60-day monitoring window.
+    - Overdue alerts for verified or matured FDRs that remain unresolved.
 
     Repeated scans do not create duplicate alerts of the same type
     for the same FDR.

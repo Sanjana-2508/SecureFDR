@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Wallet, FileStack, CalendarClock, AlertTriangle } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import api from '../api'
 import { useAuth } from '../AuthContext'
 import StatusBadge from '../components/StatusBadge'
@@ -33,8 +44,9 @@ export default function Dashboard() {
 
   if (!fdrs) return <div className="flex justify-center py-20"><span className="loading loading-spinner loading-lg text-primary" /></div>
 
-  const now = new Date()
-  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  const todayDate = new Date().toISOString().slice(0, 10)
+  const [todayYear, todayMonth, todayDay] = todayDate.split('-').map(Number)
+  const today = Date.UTC(todayYear, todayMonth - 1, todayDay)
   const daysUntilMaturity = (f) => {
     const [year, month, day] = f.maturity_date.split('-').map(Number)
     return (Date.UTC(year, month - 1, day) - today) / 86400000
@@ -42,27 +54,27 @@ export default function Dashboard() {
   const active = fdrs.filter((f) => !['RELEASED', 'RENEWED'].includes(f.status))
   const upcoming = active.filter((f) => {
     const days = daysUntilMaturity(f)
-    return days >= 0 && days <= 60
+    return f.status !== 'MATURED' && days >= 0 && days <= 60
   })
   const overdue = active.filter((f) => daysUntilMaturity(f) < 0)
   const matured = active.filter(
     (f) => f.status === 'MATURED' || daysUntilMaturity(f) < 0
   )
   const maturedIds = new Set(matured.map((f) => f.id))
-  const expiring = active.filter((f) => daysUntilMaturity(f) <= 60).sort((a, b) => daysUntilMaturity(a) - daysUntilMaturity(b))
+  const expiring = [...upcoming, ...overdue].sort((a, b) => daysUntilMaturity(a) - daysUntilMaturity(b))
   const attention = fdrs.filter((f) => ['SUBMITTED', 'UNDER_REVIEW', 'DISCREPANCY'].includes(f.status))
-  const chart = [
-    ...Object.keys(STATUS_COLORS).map((s) => ({
-      status: s.replace('_', ' '),
-      key: s,
-      count: s === 'MATURED'
-        ? matured.length
-        : fdrs.filter(
-            (f) => f.status === s && !maturedIds.has(f.id)
-          ).length,
-    })),
-    { status: 'Upcoming (60d)', key: 'UPCOMING', count: upcoming.length, color: '#f59e0b' },
-    { status: 'Overdue (date)', key: 'OVERDUE', count: overdue.length, color: '#dc2626' },
+  const statusChart = Object.keys(STATUS_COLORS).map((status) => ({
+    name: status.replaceAll('_', ' '),
+    key: status,
+    value: status === 'MATURED'
+      ? matured.length
+      : fdrs.filter(
+          (f) => f.status === status && !maturedIds.has(f.id)
+        ).length,
+  })).filter((item) => item.value > 0)
+  const maturityChart = [
+    { name: 'Upcoming (60 days)', value: upcoming.length, color: '#d97706' },
+    { name: 'Overdue', value: overdue.length, color: '#dc2626' },
   ]
   const isInst = user.role === 'INSTITUTION'
 
@@ -86,56 +98,96 @@ export default function Dashboard() {
         </span>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <Stat icon={FileStack} label={isInst ? 'My FDRs' : 'Total FDRs'} value={fdrs.length} color="bg-blue-100 text-blue-700" />
         <Stat icon={Wallet} label="Total deposit value" value={inr(fdrs.reduce((s, f) => s + f.amount, 0))} color="bg-emerald-100 text-emerald-700" />
         <Stat icon={CalendarClock} label="Maturing within 60 days" value={upcoming.length} color="bg-amber-100 text-amber-700" />
+        <Stat icon={CalendarClock} label="Overdue FDRs" value={overdue.length} color="bg-red-100 text-red-700" />
         <Stat icon={AlertTriangle} label={isInst ? 'Awaiting verification / action' : 'Pending verification'} value={attention.length} color="bg-red-100 text-red-700" />
       </div>
 
       <div className="grid xl:grid-cols-5 gap-4">
         <div className="card bg-white xl:col-span-2"><div className="card-body p-5 md:p-6">
           <div className="mb-1">
-            <h2 className="card-title text-base">FDR status & maturity</h2>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">Matured includes active FDRs past their maturity date or formally marked MATURED. Overdue is the past-date subset; renewed and released FDRs are excluded.</p>
+            <h2 className="card-title text-base">FDR status distribution</h2>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Matured combines formally matured FDRs and active records past their maturity date. Other slices show stored workflow status.</p>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <BarChart data={chart} layout="vertical" margin={{ left: 12, right: 12, top: 4, bottom: 4 }} barCategoryGap={8}>
-                <XAxis type="number" allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="status" width={105} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: '#f3f6fb' }}
-                  contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
-                  formatter={(value, _name, item) => [value, item.payload.key === 'OVERDUE' ? 'Overdue by date' : item.payload.key === 'UPCOMING' ? 'Upcoming within 60 days' : item.payload.key === 'MATURED' ? 'Matured (active)' : item.payload.status]}
-                />
-                <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={18}>
-                  {chart.map((c) => <Cell key={c.key} fill={STATUS_COLORS[c.key] || c.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {statusChart.length === 0 ? (
+            <div className="flex h-72 items-center justify-center text-sm text-slate-400">No FDR records to display.</div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={statusChart}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius="52%"
+                    outerRadius="76%"
+                    paddingAngle={2}
+                  >
+                    {statusChart.map((item) => (
+                      <Cell key={item.key} fill={STATUS_COLORS[item.key]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
+                    formatter={(value, name) => [value, name]}
+                  />
+                  <Legend verticalAlign="bottom" height={38} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div></div>
 
         <div className="card bg-white xl:col-span-3"><div className="card-body p-5 md:p-6">
+          <div className="mb-1">
+            <h2 className="card-title text-base">Maturity overview</h2>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Date-derived counts for active FDRs; renewed and released records are excluded.</p>
+          </div>
+          {active.length === 0 ? (
+            <div className="flex h-72 items-center justify-center text-sm text-slate-400">No active FDRs to assess for maturity.</div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer>
+                <BarChart data={maturityChart} margin={{ left: 0, right: 12, top: 12, bottom: 4 }}>
+                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: '#f3f6fb' }}
+                    contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 24px rgb(15 23 42 / 10%)' }}
+                    formatter={(value, _name, item) => [value, item.payload.name]}
+                  />
+                  <Bar dataKey="value" name="FDRs" radius={[5, 5, 0, 0]} maxBarSize={64}>
+                    {maturityChart.map((item) => <Cell key={item.name} fill={item.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div></div>
+      </div>
+
+      <div className="card bg-white"><div className="card-body p-5 md:p-6">
           <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 className="card-title text-base">Maturity watch</h2>
-              <p className="mt-1 text-xs text-slate-500">Upcoming in the next 60 days and past maturity</p>
+              <p className="mt-1 text-xs text-slate-500">Upcoming from today through day 60, plus overdue FDRs</p>
             </div>
             <span className="badge border-0 bg-amber-50 text-amber-800">{expiring.length} records</span>
           </div>
-          {expiring.length === 0 ? <div className="text-center text-slate-400 py-12">🎉 Nothing maturing in the next 60 days</div> : (
+          {expiring.length === 0 ? <div className="text-center text-slate-400 py-12">Nothing upcoming or overdue.</div> : (
             <div className="overflow-x-auto"><table className="table table-sm">
               <thead><tr><th>FDR</th>{!isInst && <th>Institution</th>}<th>Amount</th><th>Matures</th><th>Status</th></tr></thead>
               <tbody>{expiring.map((f) => { const d = daysUntilMaturity(f); return (
                 <tr key={f.id}><td className="font-medium">{f.reference_no}<div className="text-xs text-slate-400">{f.bank_name}</div></td>
                   {!isInst && <td className="text-xs">{f.institution}</td>}
                   <td>{inr(f.amount)}</td>
-                  <td>{fmtDate(f.maturity_date)}<div className={`text-xs font-semibold ${d < 0 ? 'text-error' : d <= 30 ? 'text-warning' : 'text-slate-400'}`}>{d < 0 ? `${-d} days overdue` : `in ${d} days`}</div></td>
+                  <td>{fmtDate(f.maturity_date)}<div className={`text-xs font-semibold ${d < 0 ? 'text-error' : d <= 30 ? 'text-warning' : 'text-slate-400'}`}>{d < 0 ? `${-d} days overdue` : d === 0 ? 'Matures today' : `in ${d} days`}</div></td>
                   <td><StatusBadge status={f.status} /></td></tr>) })}</tbody>
             </table></div>)}
-        </div></div>
+        </div>
       </div>
     </div>
   )

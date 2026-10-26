@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import FdrList from './pages/FdrList'
 import AuditLog from './pages/AuditLog'
 import Users from './pages/Users'
+import Institutions from './pages/Institutions'
 import Renewals from './pages/renewals'
 import Releases from './pages/releases'
 import Notifications from './pages/Notifications'
@@ -86,6 +87,14 @@ export default function App() {
           element={
             <Protected roles={['ADMIN']}>
               <Users />
+            </Protected>
+          }
+        />
+        <Route
+          path="/institutions"
+          element={
+            <Protected roles={['ADMIN']}>
+              <Institutions />
             </Protected>
           }
         />
